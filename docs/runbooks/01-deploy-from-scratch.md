@@ -53,7 +53,34 @@ sudo k3s kubectl -n gis get pods,pvc,jobs
 
 Коли всі дочірні застосунки мають `Synced` і `Healthy`, виконайте [перевірку з робочого місця](02-publish-and-verify.md). Повторний запуск із тим самим файлом майданчика зберігає наявні Secrets. Змінені значення секретів застосовуйте окремою процедурою ротації.
 
-Для перегляду Argo CD запустіть на сервері `sudo k3s kubectl -n argocd port-forward svc/argocd-server 8080:443` і підключіться через SSH-тунель з адміністративної машини. При першому вході прочитайте пароль `argocd-initial-admin-secret` через kubectl у захищеному терміналі. Після зміни пароля видаліть початковий Secret.
+### Доступ до Argo CD
+
+З Mac або іншої адміністративної машини відкрийте SSH-тунель. Потрібен SSH-обліковий запис на сервері з доступом до `sudo k3s kubectl`. Замініть `ubuntu` та IP на значення вашого сервера. Для тестової VM IP можна перевірити командою `multipass list`.
+
+```bash
+ssh -t -o ExitOnForwardFailure=yes -L 127.0.0.1:8080:127.0.0.1:8080 \
+  ubuntu@192.168.252.5 \
+  'sudo k3s kubectl -n argocd port-forward --address 127.0.0.1 svc/argocd-server 8080:443'
+```
+
+Залиште команду працювати й відкрийте [Argo CD](https://localhost:8080/). Для стандартної інсталяції Argo CD використовує власний TLS-сертифікат. Якщо браузер йому не довіряє, налаштуйте довірений сертифікат для Argo CD.
+
+Для першого входу використайте ім’я `admin`. Початковий пароль можна прочитати на сервері в захищеному терміналі.
+
+```bash
+sudo k3s kubectl -n argocd get secret argocd-initial-admin-secret \
+  -o jsonpath='{.data.password}' | base64 --decode
+printf '\n'
+```
+
+На Mac для тестової VM ту саму команду можна виконати через Multipass.
+
+```bash
+multipass exec gis-gitops-test -- sudo sh -c \
+  'k3s kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 --decode; printf "\n"'
+```
+
+Якщо початковий Secret уже видалено, використайте поточний пароль адміністратора. У розділі **Applications** відкрийте `gis-root` або конкретний застосунок і перегляньте **Sync Status** та **Health**. [Документація Argo CD](https://argo-cd.readthedocs.io/en/stable/getting_started/)
 
 ## 4. Діагностика першого запуску
 
