@@ -63,6 +63,21 @@ ssh -t -o ExitOnForwardFailure=yes -L 127.0.0.1:8080:127.0.0.1:8080 \
   'sudo k3s kubectl -n argocd port-forward --address 127.0.0.1 svc/argocd-server 8080:443'
 ```
 
+Для `gis-gitops-test` з Mac також можна запустити локальний `kubectl` через Multipass. Команда використовує тимчасовий kubeconfig і видаляє його після зупинки тунелю. Якщо IP VM змінився, підставте адресу з `multipass list`.
+
+```bash
+(
+  set -e
+  umask 077
+  cfg=$(mktemp)
+  trap 'rm -f "$cfg"' EXIT
+  multipass exec gis-gitops-test -- sudo cat /etc/rancher/k3s/k3s.yaml |
+    sed 's#https://127.0.0.1:6443#https://192.168.252.5:6443#' > "$cfg"
+  kubectl --kubeconfig "$cfg" -n argocd port-forward \
+    --address 127.0.0.1 svc/argocd-server 8080:443
+)
+```
+
 Залиште команду працювати й відкрийте [Argo CD](https://localhost:8080/). Для стандартної інсталяції Argo CD використовує власний TLS-сертифікат. Якщо браузер йому не довіряє, налаштуйте довірений сертифікат для Argo CD.
 
 Для першого входу використайте ім’я `admin`. Початковий пароль можна прочитати на сервері в захищеному терміналі.
