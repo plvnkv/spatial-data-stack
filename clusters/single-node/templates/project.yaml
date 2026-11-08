@@ -1,0 +1,19 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: gis
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  sourceRepos:
+  - {{ .Values.repoURL | default "https://github.com/plvnkv/spatial-data-stack" | quote }}
+  destinations:
+  - namespace: gis
+    server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+  - group: storage.k8s.io
+    kind: StorageClass
+  namespaceResourceBlacklist:
+  - group: argoproj.io
+    kind: Application

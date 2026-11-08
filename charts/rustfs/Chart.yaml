@@ -1,0 +1,7 @@
+apiVersion: v2
+name: gis-rustfs
+version: 0.1.0
+dependencies:
+- name: rustfs
+  version: 1.0.4
+  repository: https://helm.rustfs.com

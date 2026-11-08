@@ -1,0 +1,6 @@
+repoURL: https://github.com/plvnkv/spatial-data-stack
+branch: main
+lanCIDR: 192.168.10.0/24
+geonodeHost: gis.example.internal
+martinHost: vector.example.internal
+titilerHost: raster.example.internal

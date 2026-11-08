@@ -1,0 +1,104 @@
+{{- define "gis.geonode.environment" }}
+envFrom:
+- configMapRef:
+    name: geonode-env
+- secretRef:
+    name: geonode-app
+env:
+- name: GEONODE_DATABASE_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: geonode-db
+      key: password
+- name: GEONODE_GEODATABASE_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: geoserver-db
+      key: password
+- name: DATABASE_URL
+  value: "postgis://geonode:$(GEONODE_DATABASE_PASSWORD)@postgis:5432/geonode"
+- name: GEODATABASE_URL
+  value: "postgis://geoserver:$(GEONODE_GEODATABASE_PASSWORD)@postgis:5432/gis"
+{{- end }}
+{{- range $role := list "django" "celery" }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $role }}
+spec:
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: {{ $role }}
+  template:
+    metadata:
+      labels:
+        app: {{ $role }}
+        gis-postgis-client: "true"
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/config.yaml") $ | sha256sum }}
+    spec:
+      initContainers:
+      - name: wait-for-data
+        image: {{ $.Values.geonodeImage | quote }}
+        {{- include "gis.geonode.environment" $ | nindent 8 }}
+        command: [bash, -ec]
+        args:
+        - |
+          until python -c 'import os, psycopg2; [psycopg2.connect(os.environ[k].replace("postgis://", "postgresql://", 1), connect_timeout=3).close() for k in ("DATABASE_URL","GEODATABASE_URL")]' >/dev/null 2>&1; do sleep 5; done
+          {{- if eq $role "celery" }}
+          until curl -fsS http://django:8000/ >/dev/null 2>&1; do sleep 5; done
+          {{- end }}
+      containers:
+      - name: {{ $role }}
+        image: {{ $.Values.geonodeImage | quote }}
+        {{- include "gis.geonode.environment" $ | nindent 8 }}
+        command: [bash, -ec]
+        args:
+        - |
+          {{- if eq $role "django" }}
+          cd /usr/src/geonode
+          invoke migrations
+          invoke statics
+          if [ ! -f /mnt/volumes/statics/geonode_init.lock ]; then
+            umask 077
+            invoke prepare fixtures updateadmin
+            python manage.py loaddata /tmp/default_site.json
+            invoke initialized
+          fi
+          exec uwsgi --ini /usr/src/geonode/uwsgi.ini
+          {{- else }}
+          exec celery-cmd
+          {{- end }}
+        {{- if eq $role "django" }}
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8000
+            httpHeaders:
+            - name: Host
+              value: {{ $.Values.host | quote }}
+            - name: X-Forwarded-Proto
+              value: https
+        {{- end }}
+        volumeMounts:
+        - name: settings
+          mountPath: /etc/geonode
+          readOnly: true
+        - name: statics
+          mountPath: /mnt/volumes/statics
+        - name: geoserver-data
+          mountPath: /geoserver_data/data
+      volumes:
+      - name: settings
+        configMap:
+          name: geonode-settings
+      - name: statics
+        persistentVolumeClaim:
+          claimName: geonode-statics
+      - name: geoserver-data
+        persistentVolumeClaim:
+          claimName: geoserver-data
+{{- end }}

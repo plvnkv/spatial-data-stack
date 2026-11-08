@@ -1,0 +1,4 @@
+image: ghcr.io/developmentseed/titiler:2.4.0
+host: raster.example.internal
+lanCIDR: 192.168.10.0/24
+assets: {}

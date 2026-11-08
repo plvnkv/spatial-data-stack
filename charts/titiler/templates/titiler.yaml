@@ -1,0 +1,92 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: titiler-config
+data:
+  assets.json: {{ .Values.assets | toJson | quote }}
+  {{- (.Files.Glob "files/*.py").AsConfig | nindent 2 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: titiler
+spec:
+  selector:
+    app: titiler
+  ports:
+  - port: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: titiler
+spec:
+  selector:
+    matchLabels:
+      app: titiler
+  template:
+    metadata:
+      labels:
+        app: titiler
+      annotations:
+        checksum/config: {{ printf "%s%s%s" (.Values.assets | toJson) (.Files.Get "files/app.py") (.Files.Get "files/catalog.py") | sha256sum }}
+    spec:
+      containers:
+      - name: titiler
+        image: {{ .Values.image | quote }}
+        command: [python, -m, uvicorn, app:app, --app-dir, /etc/titiler, --host, 0.0.0.0, --port, "8000"]
+        envFrom:
+        - secretRef:
+            name: titiler-s3
+        env:
+        - name: AWS_S3_ENDPOINT
+          value: rustfs-svc:9000
+        - name: AWS_HTTPS
+          value: "NO"
+        - name: AWS_VIRTUAL_HOSTING
+          value: "FALSE"
+        - name: AWS_DEFAULT_REGION
+          value: us-east-1
+        - name: GDAL_DISABLE_READDIR_ON_OPEN
+          value: EMPTY_DIR
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+        volumeMounts:
+        - name: config
+          mountPath: /etc/titiler
+          readOnly: true
+      volumes:
+      - name: config
+        configMap:
+          name: titiler-config
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: titiler-egress
+spec:
+  podSelector:
+    matchLabels:
+      app: titiler
+  policyTypes: [Egress]
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: rustfs
+    ports:
+    - port: 9000
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - port: 53
+      protocol: UDP
+    - port: 53
+      protocol: TCP

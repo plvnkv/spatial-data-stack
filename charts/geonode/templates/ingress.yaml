@@ -1,0 +1,33 @@
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: geonode-lan
+spec:
+  ipAllowList:
+    sourceRange:
+    - {{ .Values.lanCIDR | quote }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: geonode
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.middlewares: "{{ .Release.Namespace }}-geonode-lan@kubernetescrd"
+spec:
+  ingressClassName: traefik
+  tls:
+  - secretName: geonode-tls
+    hosts:
+    - {{ .Values.host | quote }}
+  rules:
+  - host: {{ .Values.host | quote }}
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: geonode
+            port:
+              number: 80

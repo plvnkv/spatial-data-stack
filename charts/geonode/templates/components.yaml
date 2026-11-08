@@ -1,0 +1,126 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: geoserver
+spec:
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: geoserver
+  template:
+    metadata:
+      labels:
+        app: geoserver
+        gis-postgis-client: "true"
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/config.yaml") . | sha256sum }}
+    spec:
+      initContainers:
+      - name: seed-data
+        image: {{ .Values.geoserverDataImage | quote }}
+        command: [sh, -ec]
+        args:
+        - |
+          if [ ! -e /target/.gis-seeded ]; then
+            test -d /geoserver_data/data/security
+            cp -a /geoserver_data/data/. /target/
+            touch /target/.gis-seeded
+          fi
+        volumeMounts:
+        - name: data
+          mountPath: /target
+      containers:
+      - name: geoserver
+        image: {{ .Values.geoserverImage | quote }}
+        {{- include "gis.geonode.environment" . | nindent 8 }}
+        command: [bash, -ec]
+        args:
+        - |
+          # Preserve upstream bootstrap while removing its cleartext password diagnostic.
+          sed -i '/^[[:space:]]*echo "GEONODE_GEODATABASE_PASSWORD /d' /usr/local/bin/entrypoint.sh
+          sed -i 's/echo export DATABASE_HOST=${DATABASE_PORT}/echo export DATABASE_PORT=${DATABASE_PORT}/' /usr/local/bin/entrypoint.sh
+          exec /usr/local/bin/entrypoint.sh
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - -ec
+            - |
+              test -f /geoserver_data/data/geoserver_init.lock
+              curl -fsS --max-time 3 -o /dev/null \
+                -u "$GEOSERVER_ADMIN_USER:$GEOSERVER_ADMIN_PASSWORD" \
+                http://127.0.0.1:8080/geoserver/rest/workspaces.json
+          timeoutSeconds: 5
+        volumeMounts:
+        - name: data
+          mountPath: /geoserver_data/data
+        - name: statics
+          mountPath: /mnt/volumes/statics
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: geoserver-data
+      - name: statics
+        persistentVolumeClaim:
+          claimName: geonode-statics
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: geonode
+spec:
+  selector:
+    matchLabels:
+      app: geonode
+  template:
+    metadata:
+      labels:
+        app: geonode
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/config.yaml") . | sha256sum }}
+    spec:
+      containers:
+      - name: nginx
+        image: {{ .Values.nginxImage | quote }}
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+            httpHeaders:
+            - name: Host
+              value: {{ .Values.host | quote }}
+        volumeMounts:
+        - name: config
+          mountPath: /etc/nginx/conf.d
+          readOnly: true
+        - name: statics
+          mountPath: /mnt/volumes/statics
+          readOnly: true
+      volumes:
+      - name: config
+        configMap:
+          name: geonode-nginx
+      - name: statics
+        persistentVolumeClaim:
+          claimName: geonode-statics
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+spec:
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - name: redis
+        image: {{ .Values.redisImage | quote }}
+        readinessProbe:
+          tcpSocket:
+            port: 6379

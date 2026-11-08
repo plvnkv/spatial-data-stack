@@ -1,0 +1,64 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: geonode-env
+data:
+  DJANGO_SETTINGS_MODULE: gis_settings
+  PYTHONPATH: /etc/geonode
+  NGINX_BASE_URL: {{ printf "https://%s" .Values.host | quote }}
+  SITEURL: {{ printf "https://%s/" .Values.host | quote }}
+  ALLOWED_HOSTS: {{ printf "['%s','django','geonode','localhost']" .Values.host | quote }}
+  GEOSERVER_PUBLIC_LOCATION: {{ printf "https://%s/geoserver/" .Values.host | quote }}
+  GEOSERVER_WEB_UI_LOCATION: {{ printf "https://%s/geoserver/" .Values.host | quote }}
+  GEOSERVER_LOCATION: http://geoserver:8080/geoserver/
+  GEONODE_LB_HOST_IP: django
+  GEONODE_LB_PORT: "8000"
+  GEOSERVER_LB_HOST_IP: geoserver
+  GEOSERVER_LB_PORT: "8080"
+  GEOSERVER_ADMIN_USER: admin
+  DATABASE_HOST: postgis
+  DATABASE_PORT: "5432"
+  GEONODE_DATABASE: geonode
+  GEONODE_DATABASE_USER: geonode
+  GEONODE_GEODATABASE: gis
+  GEONODE_GEODATABASE_USER: geoserver
+  GEONODE_GEODATABASE_SCHEMA: published
+  DEFAULT_BACKEND_DATASTORE: datastore
+  BROKER_URL: redis://redis:6379/0
+  CELERY_RESULT_BACKEND: redis://redis:6379/1
+  ASYNC_SIGNALS: "True"
+  DEBUG: "False"
+  STATIC_ROOT: /mnt/volumes/statics/static/
+  MEDIA_ROOT: /mnt/volumes/statics/uploaded/
+  ASSETS_ROOT: /mnt/volumes/statics/assets/
+  ACCOUNT_OPEN_SIGNUP: "False"
+  SESSION_COOKIE_SECURE: "True"
+  CSRF_COOKIE_SECURE: "True"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: geonode-nginx
+data:
+  default.conf: |
+    server {
+      listen 80;
+      client_max_body_size 256m;
+      proxy_read_timeout 300s;
+      proxy_set_header Host $host;
+      proxy_set_header X-Forwarded-Host $host;
+      proxy_set_header X-Forwarded-Proto https;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      location /static/ { alias /mnt/volumes/statics/static/; }
+      location /uploaded/ { alias /mnt/volumes/statics/uploaded/; }
+      location /geoserver/ { proxy_pass http://geoserver:8080; }
+      location / { proxy_pass http://django:8000; }
+    }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: geonode-settings
+data:
+  gis_settings.py: |
+    {{- .Files.Get "files/gis_settings.py" | nindent 4 }}

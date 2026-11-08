@@ -1,0 +1,4 @@
+image: ghcr.io/maplibre/martin:2.0.0-beta.6
+host: vector.example.internal
+lanCIDR: 192.168.10.0/24
+tables: {}

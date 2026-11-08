@@ -1,0 +1,39 @@
+{{- range $name := list "storage" "postgis" "rustfs" "geonode" "martin" "titiler" }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ $name }}
+  namespace: argocd
+spec:
+  project: gis
+  source:
+    repoURL: {{ $.Values.repoURL | quote }}
+    targetRevision: {{ $.Values.branch | quote }}
+    path: charts/{{ $name }}
+    helm:
+      ignoreMissingValueFiles: true
+      valueFiles:
+      - ../../clusters/single-node/values/{{ $name }}.yaml
+      {{- if has $name (list "geonode" "martin" "titiler") }}
+      parameters:
+      - name: host
+        value: {{ index $.Values (printf "%sHost" $name) | quote }}
+        forceString: true
+      - name: lanCIDR
+        value: {{ $.Values.lanCIDR | quote }}
+        forceString: true
+      {{- end }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: gis
+  syncPolicy:
+    automated:
+      selfHeal: true
+    retry:
+      limit: 8
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m
+{{- end }}

@@ -1,0 +1,20 @@
+name: Validate GIS GitOps
+on: [pull_request, push]
+permissions:
+  contents: read
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: azure/setup-helm@v4
+      with:
+        version: v3.19.0
+    - run: sudo apt-get update && sudo apt-get install -y ripgrep
+    - name: Validate rendered Kubernetes resources
+      run: |
+        curl -fsSL -o "$RUNNER_TEMP/kubeconform.tar.gz" \
+          https://github.com/yannh/kubeconform/releases/download/v0.7.0/kubeconform-linux-amd64.tar.gz
+        tar -xzf "$RUNNER_TEMP/kubeconform.tar.gz" -C "$RUNNER_TEMP" kubeconform
+        KUBECONFORM="$RUNNER_TEMP/kubeconform" tests/render.sh all
+    - run: python3 -m unittest discover -s tests

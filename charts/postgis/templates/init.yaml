@@ -1,0 +1,66 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: postgis-init
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+spec:
+  backoffLimit: 5
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      labels:
+        gis-postgis-client: "true"
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: init
+        image: {{ .Values.image | quote }}
+        env:
+        - name: PGHOST
+          value: postgis
+        - name: PGUSER
+          value: postgres
+        - name: PGDATABASE
+          value: postgres
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgis-admin
+              key: password
+        {{- range $role := list "geonode" "geoserver" "martin" }}
+        - name: {{ $role | upper }}_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ $role }}-db
+              key: password
+        {{- end }}
+        command:
+        - bash
+        - -ec
+        - |
+          psql -X -v ON_ERROR_STOP=1 <<'SQL'
+          \getenv geonode_pwd GEONODE_PASSWORD
+          \getenv geoserver_pwd GEOSERVER_PASSWORD
+          \getenv martin_pwd MARTIN_PASSWORD
+          SELECT 'CREATE ROLE geonode LOGIN' WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='geonode') \gexec
+          SELECT 'CREATE ROLE geoserver LOGIN' WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='geoserver') \gexec
+          SELECT 'CREATE ROLE martin LOGIN' WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='martin') \gexec
+          ALTER ROLE geonode PASSWORD :'geonode_pwd';
+          ALTER ROLE geoserver PASSWORD :'geoserver_pwd';
+          ALTER ROLE martin PASSWORD :'martin_pwd';
+          SELECT 'CREATE DATABASE geonode OWNER geonode' WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname='geonode') \gexec
+          SELECT 'CREATE DATABASE gis OWNER geoserver' WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname='gis') \gexec
+          REVOKE CONNECT ON DATABASE geonode FROM PUBLIC;
+          REVOKE CONNECT ON DATABASE gis FROM PUBLIC;
+          GRANT CONNECT ON DATABASE gis TO martin;
+          \connect geonode
+          CREATE EXTENSION IF NOT EXISTS postgis;
+          \connect gis
+          CREATE EXTENSION IF NOT EXISTS postgis;
+          CREATE SCHEMA IF NOT EXISTS published AUTHORIZATION geoserver;
+          GRANT USAGE ON SCHEMA public, published TO martin;
+          GRANT SELECT ON ALL TABLES IN SCHEMA published TO martin;
+          ALTER DEFAULT PRIVILEGES FOR ROLE geoserver IN SCHEMA published GRANT SELECT ON TABLES TO martin;
+          SQL

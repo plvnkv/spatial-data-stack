@@ -1,0 +1,42 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: rustfs-init
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+spec:
+  backoffLimit: 5
+  activeDeadlineSeconds: 600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: init
+        image: {{ .Values.rcImage | quote }}
+        envFrom:
+        - secretRef:
+            name: rustfs-admin
+        env:
+        {{- range $client := list "titiler" "cog-writer" }}
+        {{- range $key := list "AWS_ACCESS_KEY_ID" "AWS_SECRET_ACCESS_KEY" }}
+        - name: {{ $client | upper | replace "-" "_" }}_{{ $key }}
+          valueFrom:
+            secretKeyRef:
+              name: {{ if eq $client "titiler" }}titiler-s3{{ else }}cog-writer{{ end }}
+              key: {{ $key }}
+        {{- end }}
+        {{- end }}
+        command: [/bin/sh, -ec]
+        args:
+        - |
+          rc alias set gis http://rustfs-svc:9000 "$RUSTFS_ACCESS_KEY" "$RUSTFS_SECRET_KEY"
+          rc mb --ignore-existing gis/cog
+          printf '%s' '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:GetObject"],"Resource":["arn:aws:s3:::cog/*"]}]}' >/tmp/gis-cog-read.json
+          printf '%s' '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:ListBucket"],"Resource":["arn:aws:s3:::cog"]},{"Effect":"Allow","Action":["s3:GetObject","s3:PutObject","s3:AbortMultipartUpload"],"Resource":["arn:aws:s3:::cog/*"]}]}' >/tmp/gis-cog-write.json
+          rc admin policy create gis/ gis-cog-read /tmp/gis-cog-read.json
+          rc admin policy create gis/ gis-cog-write /tmp/gis-cog-write.json
+          rc admin user add gis/ "$TITILER_AWS_ACCESS_KEY_ID" "$TITILER_AWS_SECRET_ACCESS_KEY"
+          rc admin user add gis/ "$COG_WRITER_AWS_ACCESS_KEY_ID" "$COG_WRITER_AWS_SECRET_ACCESS_KEY"
+          rc admin policy attach gis/ gis-cog-read --user "$TITILER_AWS_ACCESS_KEY_ID"
+          rc admin policy attach gis/ gis-cog-write --user "$COG_WRITER_AWS_ACCESS_KEY_ID"

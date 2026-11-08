@@ -1,0 +1,20 @@
+size: 50Gi
+rcImage: rustfs/rc:v0.1.31
+rustfs:
+  fullnameOverride: rustfs
+  mode:
+    distributed:
+      enabled: false
+    standalone:
+      enabled: true
+      existingClaim:
+        dataClaim: rustfs-data
+  secret:
+    existingSecret: rustfs-admin
+  service:
+    type: ClusterIP
+  ingress:
+    enabled: false
+  config:
+    rustfs:
+      obs_log_directory: ""

@@ -1,0 +1,10 @@
+{
+  "repo_url": "https://github.com/plvnkv/spatial-data-stack",
+  "branch": "main",
+  "lan_cidr": "192.168.10.0/24",
+  "admin_cidr": "192.168.10.5/32",
+  "data_dir": "/srv/gis",
+  "geonode_host": "gis.example.internal",
+  "martin_host": "vector.example.internal",
+  "titiler_host": "raster.example.internal"
+}

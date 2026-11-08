@@ -1,0 +1,26 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: gis-root
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: {{ .Values.repoURL | quote }}
+    targetRevision: {{ .Values.branch | quote }}
+    path: clusters/single-node
+    helm:
+      parameters:
+      {{- range $key, $value := .Values }}
+      - name: {{ $key }}
+        value: {{ $value | quote }}
+        forceString: true
+      {{- end }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      selfHeal: true
+    retry:
+      limit: 5

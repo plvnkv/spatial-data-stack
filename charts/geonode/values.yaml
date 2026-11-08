@@ -1,0 +1,8 @@
+host: gis.example.internal
+lanCIDR: 192.168.10.0/24
+geonodeImage: geonode/geonode:5.1.1
+geoserverImage: geonode/geoserver@sha256:bdce184271658c286f256d8ee10a20b64b24eeb9488eb2ff0264588e9a83c33b
+geoserverDataImage: geonode/geoserver_data@sha256:b492afe9de5c7756f83dfc58d343340e0c226af3d4d21b42eae05722b4b3df52
+nginxImage: nginx:1.28.0-alpine
+redisImage: redis:7.4.5-alpine
+size: 20Gi

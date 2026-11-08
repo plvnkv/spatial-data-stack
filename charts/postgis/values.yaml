@@ -1,0 +1,2 @@
+image: postgis/postgis:17-3.5
+size: 20Gi
