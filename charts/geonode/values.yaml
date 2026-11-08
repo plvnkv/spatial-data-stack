@@ -6,3 +6,4 @@ geoserverDataImage: geonode/geoserver_data@sha256:b492afe9de5c7756f83dfc58d34334
 nginxImage: nginx:1.28.0-alpine
 redisImage: redis:7.4.5-alpine
 size: 20Gi
+geoserverJavaOptions: "-Xms256m -Xmx1536m -Djava.awt.headless=true -DALLOW_ENV_PARAMETRIZATION=true"

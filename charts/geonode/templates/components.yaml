@@ -37,6 +37,8 @@ spec:
         command: [bash, -ec]
         args:
         - |
+          export FORCE_REINIT=false
+          export GEOSERVER_JAVA_OPTS={{ .Values.geoserverJavaOptions | squote }}
           entrypoint=/usr/local/tomcat/tmp/entrypoint.sh
           sed -i '/^[[:space:]]*echo "GEONODE_GEODATABASE_PASSWORD /d' "$entrypoint"
           sed -i 's/echo export DATABASE_HOST=${DATABASE_PORT}/echo export DATABASE_PORT=${DATABASE_PORT}/' "$entrypoint"
