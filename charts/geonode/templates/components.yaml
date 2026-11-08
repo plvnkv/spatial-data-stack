@@ -104,6 +104,7 @@ spec:
       - name: nginx
         image: {{ .Values.nginxImage | quote }}
         readinessProbe:
+          timeoutSeconds: 5
           httpGet:
             path: /
             port: 80

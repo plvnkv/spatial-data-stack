@@ -74,6 +74,7 @@ spec:
           {{- end }}
         {{- if eq $role "django" }}
         readinessProbe:
+          timeoutSeconds: 5
           httpGet:
             path: /
             port: 8000
