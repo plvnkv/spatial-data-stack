@@ -37,10 +37,28 @@ spec:
         command: [bash, -ec]
         args:
         - |
-          # Preserve upstream bootstrap while removing its cleartext password diagnostic.
-          sed -i '/^[[:space:]]*echo "GEONODE_GEODATABASE_PASSWORD /d' /usr/local/bin/entrypoint.sh
-          sed -i 's/echo export DATABASE_HOST=${DATABASE_PORT}/echo export DATABASE_PORT=${DATABASE_PORT}/' /usr/local/bin/entrypoint.sh
-          exec /usr/local/bin/entrypoint.sh
+          entrypoint=/usr/local/tomcat/tmp/entrypoint.sh
+          sed -i '/^[[:space:]]*echo "GEONODE_GEODATABASE_PASSWORD /d' "$entrypoint"
+          sed -i 's/echo export DATABASE_HOST=${DATABASE_PORT}/echo export DATABASE_PORT=${DATABASE_PORT}/' "$entrypoint"
+          sed -i 's/nohup sh -c "invoke configure-geoserver" \&/:/' "$entrypoint"
+          (
+            rest=http://127.0.0.1:8080/geoserver/rest
+            for attempt in {1..120}; do
+              if curl -fsS --max-time 3 -o /dev/null \
+                  -u "$GEOSERVER_ADMIN_USER:$GEOSERVER_ADMIN_PASSWORD" "$rest/workspaces.json" 2>/dev/null; then
+                touch "$GEOSERVER_DATA_DIR/geoserver_init.lock"
+                exit
+              fi
+              curl -fsS --max-time 3 -o /dev/null -X PUT \
+                -u "$GEOSERVER_ADMIN_USER:${GEOSERVER_FACTORY_PASSWORD:-geoserver}" \
+                -H 'Content-Type: application/xml' \
+                --data "<userPassword><newPassword>$GEOSERVER_ADMIN_PASSWORD</newPassword></userPassword>" \
+                "$rest/security/self/password" 2>/dev/null || true
+              sleep 3
+            done
+            echo "GeoServer administrator initialization timed out" >&2
+          ) &
+          exec "$entrypoint"
         readinessProbe:
           exec:
             command:
