@@ -49,7 +49,7 @@ spec:
         - |
           until python -c 'import os, psycopg2; [psycopg2.connect(os.environ[k].replace("postgis://", "postgresql://", 1), connect_timeout=3).close() for k in ("DATABASE_URL","GEODATABASE_URL")]' >/dev/null 2>&1; do sleep 5; done
           {{- if eq $role "celery" }}
-          until curl -fsS http://django:8000/ >/dev/null 2>&1; do sleep 5; done
+          until curl -fsS --connect-timeout 3 --max-time 10 http://django:8000/ >/dev/null 2>&1; do sleep 5; done
           {{- end }}
       containers:
       - name: {{ $role }}
